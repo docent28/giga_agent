@@ -18,8 +18,7 @@ st.title("🤖 AI Агент для анализа результатов тес
 
 # --- ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ ---
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant",
-                                  "content": "👋 Добро пожаловать!\n\nЗагрузите Excel-файлы, затем нажмите одну из кнопок в боковой панели."}]
+    st.session_state.messages = [{"role": "assistant", "content": "👋 Добро пожаловать!\n\nЗагрузите Excel-файлы, затем нажмите одну из кнопок в боковой панели."}]
 
 if "processing" not in st.session_state:
     st.session_state.processing = False
@@ -32,6 +31,13 @@ if "edit_prompt" not in st.session_state:
 
 if "test_mode" not in st.session_state:
     st.session_state.test_mode = None
+
+if "files" not in st.session_state:
+    st.session_state.files = []
+
+# ВАЖНО: инициализация для промптов
+if "edited_prompts" not in st.session_state:
+    st.session_state.edited_prompts = {}
 
 
 # --- ФУНКЦИЯ ДЛЯ СОЗДАНИЯ КНОПОК С РЕДАКТИРОВАНИЕМ ---

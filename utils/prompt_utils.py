@@ -2,15 +2,25 @@
 import os
 import streamlit as st
 
-# Временное хранилище для редактируемых промптов
-if "edited_prompts" not in st.session_state:
-    st.session_state.edited_prompts = {}
+
+# --- ИНИЦИАЛИЗАЦИЯ edited_prompts (ДОБАВЛЕНО) ---
+def _init_edited_prompts():
+    """Инициализирует edited_prompts в session_state, если его нет"""
+    if "edited_prompts" not in st.session_state:
+        st.session_state.edited_prompts = {}
+
+
+# Вызываем инициализацию при загрузке модуля
+_init_edited_prompts()
 
 
 def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
     """
     Загружает промпт из файла или из временного хранилища (есть правки)
     """
+    # Убеждаемся, что edited_prompts существует
+    _init_edited_prompts()
+
     # Сначала проверяем, есть ли отредактированная версия в session_state
     if prompt_name in st.session_state.edited_prompts:
         template = st.session_state.edited_prompts[prompt_name]
@@ -53,6 +63,8 @@ def get_local_prompt_content(prompt_name):
 
 def get_edited_prompt_content(prompt_name):
     """Возвращает отредактированную версию промпта (если есть) или локальную"""
+    _init_edited_prompts()
+
     if prompt_name in st.session_state.edited_prompts:
         return st.session_state.edited_prompts[prompt_name]
     else:
@@ -61,12 +73,14 @@ def get_edited_prompt_content(prompt_name):
 
 def save_edited_prompt(prompt_name, content):
     """Сохраняет отредактированную версию промпта в session_state (временно)"""
+    _init_edited_prompts()
     st.session_state.edited_prompts[prompt_name] = content
     return True
 
 
 def clear_edited_prompt(prompt_name):
     """Удаляет отредактированную версию промпта"""
+    _init_edited_prompts()
     if prompt_name in st.session_state.edited_prompts:
         del st.session_state.edited_prompts[prompt_name]
         return True
