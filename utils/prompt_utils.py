@@ -1,43 +1,87 @@
 # utils/prompt_utils.py
 import os
+import streamlit as st
+
+# Временное хранилище для редактируемых промптов
+if "edited_prompts" not in st.session_state:
+    st.session_state.edited_prompts = {}
+
 
 def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
-    """Загружает промпт из файла prompts/{prompt_name}.txt и подставляет переменные"""
-    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
+    """
+    Загружает промпт из файла или из временного хранилища (есть правки)
+    """
+    # Сначала проверяем, есть ли отредактированная версия в session_state
+    if prompt_name in st.session_state.edited_prompts:
+        template = st.session_state.edited_prompts[prompt_name]
+    else:
+        # Иначе загружаем из файла
+        prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                template = f.read()
+        except FileNotFoundError:
+            return f"❌ Ошибка: файл {prompt_file} не найден."
+        except Exception as e:
+            return f"❌ Ошибка загрузки промпта: {e}"
+
+    # Подставляем переменные
     try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            template = f.read()
         prompt = template.format(
             etalon_info=etalon_info,
             answers_info=answers_info,
             basic_stats=basic_stats
         )
         return prompt
-    except FileNotFoundError:
-        return f"❌ Ошибка: файл {prompt_file} не найден."
+    except KeyError as e:
+        return f"❌ Ошибка: в промпте отсутствует переменная {e}"
     except Exception as e:
-        return f"❌ Ошибка загрузки промпта: {e}"
+        return f"❌ Ошибка форматирования промпта: {e}"
 
-def get_prompt_preview(prompt_name):
-    """Возвращает первые 500 символов промпта для предпросмотра"""
-    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
-    try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            content = f.read()
-        preview = content[:500]
-        if len(content) > 500:
-            preview += "\n\n... (промпт обрезан, полный текст в файле)"
-        return preview
-    except FileNotFoundError:
-        return f"❌ Файл {prompt_file} не найден"
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
 
-def get_full_prompt_text(prompt_name):
-    """Возвращает полный текст промпта"""
+def get_local_prompt_content(prompt_name):
+    """Загружает промпт из локального файла (без подстановки переменных)"""
     prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
     try:
         with open(prompt_file, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
         return f"❌ Файл {prompt_file} не найден"
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
+
+
+def get_edited_prompt_content(prompt_name):
+    """Возвращает отредактированную версию промпта (если есть) или локальную"""
+    if prompt_name in st.session_state.edited_prompts:
+        return st.session_state.edited_prompts[prompt_name]
+    else:
+        return get_local_prompt_content(prompt_name)
+
+
+def save_edited_prompt(prompt_name, content):
+    """Сохраняет отредактированную версию промпта в session_state (временно)"""
+    st.session_state.edited_prompts[prompt_name] = content
+    return True
+
+
+def clear_edited_prompt(prompt_name):
+    """Удаляет отредактированную версию промпта"""
+    if prompt_name in st.session_state.edited_prompts:
+        del st.session_state.edited_prompts[prompt_name]
+        return True
+    return False
+
+
+def get_full_prompt_text(prompt_name):
+    """Возвращает полный текст промпта для предпросмотра"""
+    return get_edited_prompt_content(prompt_name)
+
+
+def get_prompt_preview(prompt_name, length=500):
+    """Возвращает preview промпта"""
+    content = get_edited_prompt_content(prompt_name)
+    preview = content[:length]
+    if len(content) > length:
+        preview += "\n\n... (промпт обрезан)"
+    return preview

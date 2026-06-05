@@ -48,7 +48,7 @@ def call_deepseek(prompt, api_key):
 
 
 def get_key_status():
-    """Возвращает статус всех API ключей (только наличие, без отображения символов)"""
+    """Возвращает статус всех API ключей"""
     GIGACHAT_KEY = os.getenv("GIGACHAT_KEY")
     DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")
 
