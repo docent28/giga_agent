@@ -188,17 +188,19 @@ if st.session_state.edit_prompt:
             st.rerun()
 
     with col3:
-        # Кнопка сохранения в GitHub (требует токен)
-        github_token = None
-        try:
-            github_token = st.secrets.get("GITHUB_TOKEN")
-        except:
-            pass
+        # Кнопка сохранения в GitHub
+        from utils.github_utils import get_github_token, update_file_on_github, get_repo_info
 
-        if github_token:
+        github_token = get_github_token()
+        owner, repo = get_repo_info()
+
+        # Проверяем, что токен есть и репозиторий настроен
+        token_ok = github_token is not None
+        repo_ok = owner not in ["ВАШ_ЛОГИН", ""] and repo not in ["ВАШ_РЕПОЗИТОРИЙ", ""]
+
+        if token_ok and repo_ok:
             if st.button("💾 Сохранить в GitHub", use_container_width=True):
                 save_edited_prompt(prompt_name, new_content)
-                # Сохраняем в GitHub
                 file_path = f"prompts/{prompt_name}.txt"
                 success, message = update_file_on_github(
                     file_path,
@@ -207,14 +209,21 @@ if st.session_state.edit_prompt:
                 )
                 if success:
                     st.success(message)
-                    # Очищаем временную версию после успешного сохранения
                     clear_edited_prompt(prompt_name)
+                    # Очищаем режим редактирования
+                    st.session_state.edit_prompt = None
                 else:
                     st.error(message)
                 st.rerun()
         else:
+            disabled_reason = []
+            if not token_ok:
+                disabled_reason.append("нет токена")
+            if not repo_ok:
+                disabled_reason.append("не настроен репозиторий")
+
             st.button("💾 Сохранить в GitHub", use_container_width=True, disabled=True,
-                      help="GitHub токен не настроен. Добавьте GITHUB_TOKEN в Secrets.")
+                      help=f"GitHub не настроен: {', '.join(disabled_reason)}. Добавьте GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO в .env")
 
     with col4:
         if st.button("✖️ Отмена", use_container_width=True):

@@ -2,27 +2,54 @@
 import base64
 import requests
 import streamlit as st
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def get_github_token():
-    """Получает GitHub токен из st.secrets"""
+    """
+    Получает GitHub токен.
+    Локально: из .env файла (переменная GITHUB_TOKEN)
+    Streamlit Cloud: из st.secrets
+    """
+    # Пробуем получить из st.secrets (для Streamlit Cloud)
     try:
-        return st.secrets.get("GITHUB_TOKEN")
+        token = st.secrets.get("GITHUB_TOKEN")
+        if token:
+            return token
     except:
-        return None
+        pass
+
+    # Пробуем получить из .env (для локальной разработки)
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        return token
+
+    return None
 
 
 def get_repo_info():
-    """Определяет владельца и название репозитория из переменных окружения"""
-    import os
-    # Пытаемся получить из переменных окружения (можно установить вручную)
+    """
+    Определяет владельца и название репозитория.
+    Можно указать в .env переменные GITHUB_OWNER и GITHUB_REPO
+    """
+    # Пробуем получить из переменных окружения
+    owner = os.getenv("GITHUB_OWNER", "")
+    repo = os.getenv("GITHUB_REPO", "")
+
+    if owner and repo:
+        return owner, repo
+
+    # Если не указаны, пробуем получить из GITHUB_REPOSITORY (для Streamlit Cloud)
     repo_full = os.getenv("GITHUB_REPOSITORY", "")
     if repo_full:
         parts = repo_full.split("/")
         if len(parts) == 2:
             return parts[0], parts[1]
 
-    # Значения по умолчанию - ЗАМЕНИТЕ НА ВАШИ!
+    # ЗНАЧЕНИЯ ПО УМОЛЧАНИЮ - ЗАМЕНИТЕ НА ВАШИ!
     # ВАЖНО: Укажите здесь ваш логин и название репозитория
     return "docent28", "giga_agent"
 
@@ -33,7 +60,7 @@ def get_file_from_github(file_path, branch="main"):
     """
     token = get_github_token()
     if not token:
-        return None, "❌ GitHub токен не найден. Добавьте GITHUB_TOKEN в Secrets."
+        return None, "❌ GitHub токен не найден. Добавьте GITHUB_TOKEN в .env или Secrets."
 
     owner, repo = get_repo_info()
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
@@ -64,9 +91,14 @@ def update_file_on_github(file_path, content, commit_message, branch="main"):
     """
     token = get_github_token()
     if not token:
-        return False, "❌ GitHub токен не найден. Добавьте GITHUB_TOKEN в Secrets."
+        return False, "❌ GitHub токен не найден. Добавьте GITHUB_TOKEN в .env или Secrets."
 
     owner, repo = get_repo_info()
+
+    # Проверяем, что owner и repo не содержат значения по умолчанию
+    if owner == "ВАШ_ЛОГИН" or repo == "ВАШ_РЕПОЗИТОРИЙ":
+        return False, "❌ Не настроены данные репозитория. Укажите GITHUB_OWNER и GITHUB_REPO в .env"
+
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
 
     headers = {
@@ -94,6 +126,6 @@ def update_file_on_github(file_path, content, commit_message, branch="main"):
         if response.status_code in [200, 201]:
             return True, "✅ Файл успешно сохранён в GitHub"
         else:
-            return False, f"❌ Ошибка сохранения: {response.status_code} - {response.text[:200]}"
+            return False, f"❌ Ошибка сохранения: {response.status_code}"
     except Exception as e:
         return False, f"❌ Ошибка: {e}"

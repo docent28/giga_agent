@@ -3,22 +3,21 @@ import os
 import streamlit as st
 
 
-# --- ИНИЦИАЛИЗАЦИЯ edited_prompts (ДОБАВЛЕНО) ---
+# --- ИНИЦИАЛИЗАЦИЯ edited_prompts ---
 def _init_edited_prompts():
     """Инициализирует edited_prompts в session_state, если его нет"""
     if "edited_prompts" not in st.session_state:
         st.session_state.edited_prompts = {}
 
 
-# Вызываем инициализацию при загрузке модуля
 _init_edited_prompts()
 
 
 def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
     """
     Загружает промпт из файла или из временного хранилища (есть правки)
+    и ПОДСТАВЛЯЕТ переменные ВСЕГДА
     """
-    # Убеждаемся, что edited_prompts существует
     _init_edited_prompts()
 
     # Сначала проверяем, есть ли отредактированная версия в session_state
@@ -35,7 +34,7 @@ def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
         except Exception as e:
             return f"❌ Ошибка загрузки промпта: {e}"
 
-    # Подставляем переменные
+    # ВАЖНО: Всегда подставляем переменные, даже для отредактированного промпта
     try:
         prompt = template.format(
             etalon_info=etalon_info,
