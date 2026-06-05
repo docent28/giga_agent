@@ -48,20 +48,16 @@ def call_deepseek(prompt, api_key):
 
 
 def get_key_status():
-    """Возвращает статус всех API ключей"""
+    """Возвращает статус всех API ключей (только наличие, без отображения символов)"""
     GIGACHAT_KEY = os.getenv("GIGACHAT_KEY")
     DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")
 
     status = {
         "gigachat": {
-            "present": bool(GIGACHAT_KEY),
-            "preview": GIGACHAT_KEY[:10] + "..." if GIGACHAT_KEY and len(GIGACHAT_KEY) > 10 else (
-                GIGACHAT_KEY if GIGACHAT_KEY else "отсутствует")
+            "present": bool(GIGACHAT_KEY)
         },
         "deepseek": {
-            "present": bool(DEEPSEEK_KEY),
-            "preview": DEEPSEEK_KEY[:10] + "..." if DEEPSEEK_KEY and len(DEEPSEEK_KEY) > 10 else (
-                DEEPSEEK_KEY if DEEPSEEK_KEY else "отсутствует")
+            "present": bool(DEEPSEEK_KEY)
         }
     }
     return status

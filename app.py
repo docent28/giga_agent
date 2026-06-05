@@ -54,20 +54,18 @@ with st.sidebar:
 
     # GigaChat статус
     if key_status["gigachat"]["present"]:
-        st.success(f"✅ **GigaChat:** ключ загружен")
-        st.caption(f"   {key_status['gigachat']['preview']}")
+        st.success("✅ **GigaChat:** ключ загружен")
     else:
         st.error("❌ **GigaChat:** ключ не найден")
-        st.caption("   Добавьте GIGACHAT_KEY в файл .env")
+        st.caption("Добавьте GIGACHAT_KEY в файл .env")
 
     # DeepSeek статус
     if key_status["deepseek"]["present"]:
-        st.success(f"✅ **DeepSeek:** ключ загружен")
-        st.caption(f"   {key_status['deepseek']['preview']}")
-        st.caption("   💡 Для работы нужен пополненный баланс")
+        st.success("✅ **DeepSeek:** ключ загружен")
+        st.caption("💡 Для работы нужен пополненный баланс")
     else:
         st.warning("⚠️ **DeepSeek:** ключ не найден")
-        st.caption("   Добавьте DEEPSEEK_KEY в файл .env для использования")
+        st.caption("Добавьте DEEPSEEK_KEY в файл .env")
 
     st.divider()
 
