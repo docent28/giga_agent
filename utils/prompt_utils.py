@@ -15,7 +15,6 @@ def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
     except Exception as e:
         return f"❌ Ошибка загрузки промпта: {e}"
 
-    # Подставляем переменные
     try:
         prompt = template.format(
             etalon_info=etalon_info,
@@ -30,7 +29,10 @@ def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
 
 
 def get_prompt_content(prompt_name):
-    """Возвращает полный текст промпта без подстановки переменных (для просмотра)"""
+    """
+    Возвращает полный текст промпта без подстановки переменных
+    (для просмотра/редактирования)
+    """
     prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
     try:
         with open(prompt_file, "r", encoding="utf-8") as f:
@@ -39,3 +41,16 @@ def get_prompt_content(prompt_name):
         return f"❌ Файл {prompt_file} не найден"
     except Exception as e:
         return f"❌ Ошибка: {e}"
+
+
+def save_prompt_to_local(prompt_name, content):
+    """
+    Сохраняет промпт в локальный файл (только для локальной разработки)
+    """
+    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
+    try:
+        with open(prompt_file, "w", encoding="utf-8") as f:
+            f.write(content)
+        return True, "✅ Промпт сохранён локально"
+    except Exception as e:
+        return False, f"❌ Ошибка сохранения: {e}"
