@@ -1,56 +1,41 @@
 # utils/prompt_utils.py
 import os
+from utils.github_utils import get_file_content, get_prompt_files
 
 
 def load_prompt(prompt_name, etalon_info, answers_info, basic_stats=""):
     """
-    Загружает промпт из файла и подставляет переменные
+    Загружает промпт из GitHub и подставляет переменные
     """
-    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
-    try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            template = f.read()
-    except FileNotFoundError:
-        return f"❌ Ошибка: файл {prompt_file} не найден."
-    except Exception as e:
-        return f"❌ Ошибка загрузки промпта: {e}"
+    content, error = get_file_content(f"prompts/{prompt_name}.txt")
+    if error:
+        return f"Ошибка загрузки промпта: {error}"
 
     try:
-        prompt = template.format(
+        prompt = content.format(
             etalon_info=etalon_info,
             answers_info=answers_info,
             basic_stats=basic_stats
         )
         return prompt
     except KeyError as e:
-        return f"❌ Ошибка: в промпте отсутствует переменная {e}"
+        return f"Ошибка: в промпте отсутствует переменная {e}"
     except Exception as e:
-        return f"❌ Ошибка форматирования промпта: {e}"
+        return f"Ошибка форматирования промпта: {e}"
 
 
 def get_prompt_content(prompt_name):
     """
     Возвращает полный текст промпта без подстановки переменных
-    (для просмотра/редактирования)
     """
-    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
-    try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return f"❌ Файл {prompt_file} не найден"
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
+    content, error = get_file_content(f"prompts/{prompt_name}.txt")
+    if error:
+        return f"Ошибка: {error}"
+    return content
 
 
-def save_prompt_to_local(prompt_name, content):
+def get_all_prompts():
     """
-    Сохраняет промпт в локальный файл (только для локальной разработки)
+    Возвращает список всех промптов (имён файлов без расширения)
     """
-    prompt_file = os.path.join("prompts", f"{prompt_name}.txt")
-    try:
-        with open(prompt_file, "w", encoding="utf-8") as f:
-            f.write(content)
-        return True, "✅ Промпт сохранён локально"
-    except Exception as e:
-        return False, f"❌ Ошибка сохранения: {e}"
+    return get_prompt_files()

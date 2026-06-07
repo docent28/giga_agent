@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 from dotenv import load_dotenv
 
 from utils.file_utils import detect_file_type, detect_files_pairs, format_file_info, get_basic_stats_from_df
-from utils.prompt_utils import load_prompt, get_prompt_content, save_prompt_to_local
+from utils.prompt_utils import load_prompt, get_prompt_content, get_all_prompts
 from utils.llm_utils import call_gigachat, call_deepseek, get_key_status
-from utils.github_utils import update_file_on_github, get_github_token, get_repo_info
+from utils.github_utils import (
+    get_github_token, get_repo_info,
+    create_prompt_file, delete_prompt_file,
+    validate_filename, check_file_exists
+)
 
 load_dotenv()
 
@@ -92,21 +97,21 @@ st.markdown("""
 
 
 @st.dialog("Просмотр промпта")
-def view_prompt_dialog(prompt_name, display_name):
+def view_prompt_dialog(prompt_name):
     content = get_prompt_content(prompt_name)
     st.code(content, language="text", line_numbers=False)
-    st.caption(f"Файл: {display_name}")
+    st.caption(f"Файл: {prompt_name}.txt")
     if st.button("Закрыть", use_container_width=True):
         st.rerun()
 
 
 @st.dialog("Редактирование промпта")
-def edit_prompt_dialog(prompt_name, display_name):
+def edit_prompt_dialog(prompt_name):
     content_key = f"edit_content_{prompt_name}"
     if content_key not in st.session_state:
         st.session_state[content_key] = get_prompt_content(prompt_name)
 
-    st.caption("Файл: " + display_name)
+    st.caption(f"Файл: {prompt_name}.txt")
 
     new_content = st.text_area(
         "Редактируйте промпт:",
@@ -129,15 +134,15 @@ def edit_prompt_dialog(prompt_name, display_name):
         token = get_github_token()
         if token:
             if st.button("Сохранить в GitHub", use_container_width=True):
+                from utils.github_utils import update_file_on_github
                 file_path = f"prompts/{prompt_name}.txt"
                 success, message = update_file_on_github(
                     file_path,
                     st.session_state[content_key],
-                    f"Обновлён промпт {prompt_name} через Streamlit"
+                    f"Обновлён промпт {prompt_name}"
                 )
                 if success:
                     st.success(message)
-                    save_prompt_to_local(prompt_name, st.session_state[content_key])
                     st.rerun()
                 else:
                     st.error(message)
@@ -150,8 +155,66 @@ def edit_prompt_dialog(prompt_name, display_name):
             st.rerun()
 
 
+@st.dialog("Создание нового промпта")
+def create_prompt_dialog():
+    st.markdown("### Создание нового промпта")
+
+    raw_name = st.text_input("Название промпта (максимум 2 слова, латиница/кириллица/цифры/-/_)")
+    prompt_text = st.text_area("Текст промпта", height=300,
+                               help="Используйте переменные: {etalon_info}, {answers_info}, {basic_stats}")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Создать", use_container_width=True):
+            if not raw_name.strip():
+                st.error("Введите название промпта")
+            elif not prompt_text.strip():
+                st.error("Введите текст промпта")
+            else:
+                # Валидируем имя
+                valid_name = validate_filename(raw_name)
+                if not valid_name:
+                    st.error("Некорректное имя. Используйте буквы, цифры, дефис, подчёркивание. Максимум 2 слова.")
+                elif check_file_exists(valid_name):
+                    st.error(f"Файл {valid_name}.txt уже существует. Введите другое имя.")
+                else:
+                    success, message = create_prompt_file(valid_name, prompt_text)
+                    if success:
+                        st.success(f"Промпт '{valid_name}' создан!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(f"Ошибка: {message}")
+
+    with col2:
+        if st.button("Отмена", use_container_width=True):
+            st.rerun()
+
+
+@st.dialog("Подтверждение удаления")
+def delete_prompt_dialog(prompt_name):
+    st.markdown(f"### Удалить промпт '{prompt_name}'?")
+    st.caption("Это действие необратимо.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Да, удалить", use_container_width=True):
+            success, message = delete_prompt_file(prompt_name)
+            if success:
+                st.success(f"Промпт '{prompt_name}' удалён")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error(f"Ошибка: {message}")
+
+    with col2:
+        if st.button("Отмена", use_container_width=True):
+            st.rerun()
+
+
 def render_chat():
-    """Отображает чат с якорем внизу для прокрутки"""
     chat_html = '<div id="chatContainer" class="chat-container-custom">'
     for msg in st.session_state.messages:
         content = msg["content"].replace("\n", "<br>")
@@ -162,6 +225,22 @@ def render_chat():
     chat_html += '<div id="chat-bottom-anchor"></div>'
     chat_html += '</div>'
     return chat_html
+
+
+def scroll_bottom():
+    st.components.v1.html("""
+    <script>
+        function scrollToAnchor() {
+            var anchor = document.getElementById('chat-bottom-anchor');
+            if (anchor) {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+        }
+        setTimeout(scrollToAnchor, 100);
+        setTimeout(scrollToAnchor, 300);
+        setTimeout(scrollToAnchor, 500);
+    </script>
+    """, height=0)
 
 
 # --- ИНИЦИАЛИЗАЦИЯ ---
@@ -175,24 +254,11 @@ if "processing" not in st.session_state:
 if "action" not in st.session_state:
     st.session_state.action = None
 
+if "action_prompt_name" not in st.session_state:
+    st.session_state.action_prompt_name = None
+
 if "files" not in st.session_state:
     st.session_state.files = []
-
-# --- JS ДЛЯ ПРОКРУТКИ К ЯКОРЮ ---
-scroll_js = """
-<script>
-    function scrollToAnchor() {
-        var anchor = document.getElementById('chat-bottom-anchor');
-        if (anchor) {
-            anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
-    }
-    setTimeout(scrollToAnchor, 100);
-    setTimeout(scrollToAnchor, 300);
-    setTimeout(scrollToAnchor, 500);
-    setTimeout(scrollToAnchor, 1000);
-</script>
-"""
 
 left_col, center_col, right_col = st.columns([1.2, 3, 1.2])
 
@@ -268,9 +334,7 @@ with center_col:
 
     chat_placeholder = st.empty()
     chat_placeholder.markdown(render_chat(), unsafe_allow_html=True)
-
-    # Прокрутка при загрузке
-    st.components.v1.html(scroll_js, height=0)
+    scroll_bottom()
 
     if prompt := st.chat_input("Или задайте свой вопрос по данным...", disabled=st.session_state.processing):
         files = st.session_state.get("files", [])
@@ -299,11 +363,8 @@ with center_col:
 
                 st.session_state.messages.append({"role": "assistant", "content": answer})
 
-            # Обновляем чат
             chat_placeholder.markdown(render_chat(), unsafe_allow_html=True)
-
-            # Прокрутка к якорю
-            st.components.v1.html(scroll_js, height=0)
+            scroll_bottom()
 
 # ==================== ПРАВАЯ КОЛОНКА ====================
 with right_col:
@@ -312,73 +373,40 @@ with right_col:
     if st.session_state.processing:
         st.warning("Анализ...")
 
-    # Строка 1
-    col_a, col_b, col_c = st.columns([4, 1, 1])
-    with col_a:
-        btn_compare = st.button("Сравнить ответы", use_container_width=True, disabled=st.session_state.processing,
-                                key="btn_compare")
-    with col_b:
-        if st.button("👁️", key="view_compare", help="Просмотреть промпт"):
-            view_prompt_dialog("compare", "compare.txt")
-    with col_c:
-        if st.button("✏️", key="edit_compare", help="Редактировать промпт"):
-            edit_prompt_dialog("compare", "compare.txt")
+    # Кнопка создания промпта
+    token = get_github_token()
+    if token:
+        if st.button("+ Создать промпт", use_container_width=True, key="create_prompt_btn"):
+            create_prompt_dialog()
+    else:
+        st.info("Для создания промптов настройте GitHub токен")
 
-    if btn_compare:
-        st.session_state.action = "compare"
-        st.session_state.processing = True
-        st.rerun()
+    st.divider()
 
-    # Строка 2
-    col_a, col_b, col_c = st.columns([4, 1, 1])
-    with col_a:
-        btn_time = st.button("Анализ времени", use_container_width=True, disabled=st.session_state.processing,
-                             key="btn_time")
-    with col_b:
-        if st.button("👁️", key="view_time", help="Просмотреть промпт"):
-            view_prompt_dialog("time", "time.txt")
-    with col_c:
-        if st.button("✏️", key="edit_time", help="Редактировать промпт"):
-            edit_prompt_dialog("time", "time.txt")
+    # Получаем список всех промптов
+    prompts = get_all_prompts()
 
-    if btn_time:
-        st.session_state.action = "time"
-        st.session_state.processing = True
-        st.rerun()
-
-    # Строка 3
-    col_a, col_b, col_c = st.columns([4, 1, 1])
-    with col_a:
-        btn_critical = st.button("Критические изменения", use_container_width=True,
-                                 disabled=st.session_state.processing, key="btn_critical")
-    with col_b:
-        if st.button("👁️", key="view_critical", help="Просмотреть промпт"):
-            view_prompt_dialog("critical", "critical.txt")
-    with col_c:
-        if st.button("✏️", key="edit_critical", help="Редактировать промпт"):
-            edit_prompt_dialog("critical", "critical.txt")
-
-    if btn_critical:
-        st.session_state.action = "critical"
-        st.session_state.processing = True
-        st.rerun()
-
-    # Строка 4
-    col_a, col_b, col_c = st.columns([4, 1, 1])
-    with col_a:
-        btn_report = st.button("Полный отчёт", use_container_width=True, disabled=st.session_state.processing,
-                               key="btn_report")
-    with col_b:
-        if st.button("👁️", key="view_report", help="Просмотреть промпт"):
-            view_prompt_dialog("report", "report.txt")
-    with col_c:
-        if st.button("✏️", key="edit_report", help="Редактировать промпт"):
-            edit_prompt_dialog("report", "report.txt")
-
-    if btn_report:
-        st.session_state.action = "report"
-        st.session_state.processing = True
-        st.rerun()
+    if not prompts:
+        st.info("Нет промптов. Нажмите 'Создать промпт' для добавления.")
+    else:
+        for prompt_name in prompts:
+            col_a, col_b, col_c, col_d = st.columns([4, 1, 1, 1])
+            with col_a:
+                if st.button(prompt_name, use_container_width=True, key=f"btn_{prompt_name}",
+                             disabled=st.session_state.processing):
+                    st.session_state.action = "run_prompt"
+                    st.session_state.action_prompt_name = prompt_name
+                    st.session_state.processing = True
+                    st.rerun()
+            with col_b:
+                if st.button("👁️", key=f"view_{prompt_name}", help="Просмотреть промпт"):
+                    view_prompt_dialog(prompt_name)
+            with col_c:
+                if st.button("✏️", key=f"edit_{prompt_name}", help="Редактировать промпт"):
+                    edit_prompt_dialog(prompt_name)
+            with col_d:
+                if st.button("🗑️", key=f"delete_{prompt_name}", help="Удалить промпт"):
+                    delete_prompt_dialog(prompt_name)
 
     st.divider()
 
@@ -391,14 +419,15 @@ with right_col:
         3. Получите анализ
         """)
 
-# --- ОБРАБОТКА ДЕЙСТВИЙ (АНАЛИЗ) ---
-if st.session_state.action is not None and st.session_state.processing:
-    action = st.session_state.action
+# --- ОБРАБОТКА ДЕЙСТВИЙ (ЗАПУСК ПРОМПТА) ---
+if st.session_state.action == "run_prompt" and st.session_state.processing:
+    prompt_name = st.session_state.action_prompt_name
     files = st.session_state.get("files", [])
 
     if not files:
         st.session_state.messages.append({"role": "assistant", "content": "Сначала загрузите файлы."})
         st.session_state.action = None
+        st.session_state.action_prompt_name = None
         st.session_state.processing = False
         st.rerun()
 
@@ -408,6 +437,7 @@ if st.session_state.action is not None and st.session_state.processing:
         st.session_state.messages.append(
             {"role": "assistant", "content": "Не найден эталон. Добавьте в название файла: эталон, etalon, ключ"})
         st.session_state.action = None
+        st.session_state.action_prompt_name = None
         st.session_state.processing = False
         st.rerun()
 
@@ -415,6 +445,7 @@ if st.session_state.action is not None and st.session_state.processing:
         st.session_state.messages.append({"role": "assistant",
                                           "content": "Не найдены ответы. Добавьте в название файла: ответы, answers, пользователь"})
         st.session_state.action = None
+        st.session_state.action_prompt_name = None
         st.session_state.processing = False
         st.rerun()
 
@@ -427,21 +458,13 @@ if st.session_state.action is not None and st.session_state.processing:
     except Exception as e:
         basic_stats = f"Не удалось вычислить статистику: {e}"
 
-    prompt = load_prompt(action, etalon_info, answers_info, basic_stats)
+    prompt = load_prompt(prompt_name, etalon_info, answers_info, basic_stats)
 
-    action_names = {
-        "compare": "Сравнение ответов с эталоном",
-        "time": "Анализ времени выполнения",
-        "critical": "Выявление критических изменений",
-        "report": "Формирование полного отчёта"
-    }
-    action_name = action_names.get(action, action)
-
-    st.session_state.messages.append({"role": "user", "content": f"Запрос: {action_name}"})
+    st.session_state.messages.append({"role": "user", "content": f"Запрос: {prompt_name}"})
     st.session_state.messages.append(
         {"role": "assistant", "content": f"Анализируемые файлы:\n- Эталон: {etalon.name}\n- Ответы: {answers.name}"})
 
-    with st.spinner(f"Выполняется {action_name}..."):
+    with st.spinner(f"Выполняется {prompt_name}..."):
         if model_choice == "GigaChat":
             answer = call_gigachat(prompt)
         else:
@@ -450,5 +473,6 @@ if st.session_state.action is not None and st.session_state.processing:
         st.session_state.messages.append({"role": "assistant", "content": answer})
 
     st.session_state.action = None
+    st.session_state.action_prompt_name = None
     st.session_state.processing = False
     st.rerun()
